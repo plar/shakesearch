@@ -79,13 +79,15 @@ func (s *Searcher) Load(filename string) error {
 	return nil
 }
 
+const _MAX_RESULTS_PER_QUERY = 20
+
 func (s *Searcher) Search(query string) ([]string, error) {
 	rx, err := regexp.Compile(fmt.Sprintf("(?i)%v", query))
 	if err != nil {
 		return nil, err
 	}
 
-	idxs := s.SuffixArray.FindAllIndex(rx, -1)
+	idxs := s.SuffixArray.FindAllIndex(rx, _MAX_RESULTS_PER_QUERY)
 	results := []string{}
 	for _, idx := range idxs {
 		results = append(results, s.CompleteWorks[idx[0]-250:idx[1]+250])
