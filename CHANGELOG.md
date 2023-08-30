@@ -9,4 +9,3 @@
 
 **Improved:**
 - Enhanced frontend capabilities by integrating support for the `load more` functionality, leveraging the newly introduced `offset` parameter on the backend.
-- 
