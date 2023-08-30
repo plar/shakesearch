@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 )
 
 func main() {
@@ -36,6 +37,8 @@ func main() {
 	}
 }
 
+const _MAX_RESULTS_PER_QUERY = 20
+
 type Searcher struct {
 	CompleteWorks string
 	SuffixArray   *suffixarray.Index
@@ -43,20 +46,38 @@ type Searcher struct {
 
 func handleSearch(searcher Searcher) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		query, ok := r.URL.Query()["q"]
-		if !ok || len(query[0]) < 1 {
+		// parse query parameter
+		var query string
+		if strQuery, ok := r.URL.Query()["q"]; ok && len(strQuery[0]) > 0 {
+			query = strQuery[0]
+		} else {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("missing search query in URL params"))
 			return
 		}
 
-		results, err := searcher.Search(query[0])
+		// parse offset parameter, default 0
+		var offset int
+		if strOffset, ok := r.URL.Query()["offset"]; ok {
+			o, err := strconv.ParseInt(strOffset[0], 10, 32)
+			// make sure to pass only positive offset
+			// otherwise in case of any error use default 0 offset
+			if err == nil && o >= 0 {
+				offset = int(o)
+			}
+		}
+
+		// TODO: use `limit` instead of _MAX_RESULTS_PER_QUERY  as a query parameter
+
+		// run search
+		results, err := searcher.Search(query, offset, _MAX_RESULTS_PER_QUERY)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(fmt.Sprintf("bad query in URL params: %q", err)))
 			return
 		}
 
+		// generate response
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
 		if err = enc.Encode(results); err != nil {
@@ -79,17 +100,29 @@ func (s *Searcher) Load(filename string) error {
 	return nil
 }
 
-const _MAX_RESULTS_PER_QUERY = 20
+func sliceResults(results [][]int, offset, totalPerQuery int) [][]int {
+	if offset >= len(results) {
+		// Offset is beyond the length
+		return nil
+	}
 
-func (s *Searcher) Search(query string) ([]string, error) {
-	rx, err := regexp.Compile(fmt.Sprintf("(?i)%v", query))
+	end := offset + totalPerQuery
+	if end > len(results) {
+		// Make sure the end doesn't exceed the length of results
+		end = len(results)
+	}
+	return results[offset:end]
+}
+
+func (s *Searcher) Search(query string, offset, num int) ([]string, error) {
+	rx, err := regexp.Compile(fmt.Sprintf("(?i)%v", regexp.QuoteMeta(query)))
 	if err != nil {
 		return nil, err
 	}
 
-	idxs := s.SuffixArray.FindAllIndex(rx, _MAX_RESULTS_PER_QUERY)
 	results := []string{}
-	for _, idx := range idxs {
+	idxs := s.SuffixArray.FindAllIndex(rx, offset+num)
+	for _, idx := range sliceResults(idxs, offset, num) {
 		results = append(results, s.CompleteWorks[idx[0]-250:idx[1]+250])
 	}
 	return results, nil
