@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 )
 
 func main() {
@@ -48,11 +49,17 @@ func handleSearch(searcher Searcher) func(w http.ResponseWriter, r *http.Request
 			w.Write([]byte("missing search query in URL params"))
 			return
 		}
-		results := searcher.Search(query[0])
-		buf := &bytes.Buffer{}
-		enc := json.NewEncoder(buf)
-		err := enc.Encode(results)
+
+		results, err := searcher.Search(query[0])
 		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf("bad query in URL params: %q", err)))
+			return
+		}
+
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		if err = enc.Encode(results); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("encoding failure"))
 			return
@@ -72,11 +79,16 @@ func (s *Searcher) Load(filename string) error {
 	return nil
 }
 
-func (s *Searcher) Search(query string) []string {
-	idxs := s.SuffixArray.Lookup([]byte(query), -1)
+func (s *Searcher) Search(query string) ([]string, error) {
+	rx, err := regexp.Compile(fmt.Sprintf("(?i)%v", query))
+	if err != nil {
+		return nil, err
+	}
+
+	idxs := s.SuffixArray.FindAllIndex(rx, -1)
 	results := []string{}
 	for _, idx := range idxs {
-		results = append(results, s.CompleteWorks[idx-250:idx+250])
+		results = append(results, s.CompleteWorks[idx[0]-250:idx[1]+250])
 	}
-	return results
+	return results, nil
 }
