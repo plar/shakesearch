@@ -6,12 +6,31 @@
   <title>ShakeSearch</title>
   <link rel="stylesheet" href="style.css">
   <meta name="theme-color" content="#fafafa">
+  <style>
+    #table-body tr:nth-child(even) {
+      background: #F0F0F0;
+    }
+
+    #table-body tr:nth-child(odd) {
+      background: #FFF;
+    }
+
+    #table-body tr td {
+      vertical-align: top;
+    }
+
+    #table-body strong {
+      background-color:#ff0;
+      font-size:100%;
+    }
+  </style>
 </head>
 
 <body>
   <p>
   <form id="form">
     <label for="query">Query</label>
+    <input type="hidden" id="offset" name="offset" value="0">
     <input type="text" id="query" name="query">
     <button type="submit">Search</button>
   </form>
@@ -21,7 +40,7 @@
     <tbody id="table-body"></tbody>
   </table>
   </p>
-  <button>Load More</button>
+  <button id="load-more">Load More</button>
   <script src="app.js"></script>
 </body>
 
